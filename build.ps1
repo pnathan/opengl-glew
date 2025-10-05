@@ -12,6 +12,7 @@ Environment variables (optional):
 
 param(
     [switch]$Clean,
+    [switch]$Test,
     [string]$OutDir = 'build'
 )
 
@@ -21,7 +22,6 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 $projRoot = Resolve-Path "$here"
 
-$src = Join-Path $projRoot 'src\main.cpp'
 $outDirFull = Join-Path $projRoot $OutDir
 
 if ($Clean) {
@@ -31,6 +31,39 @@ if ($Clean) {
     }
     exit 0
 }
+
+if ($Test) {
+    $testSrcFile = 'test_math.cpp'
+    $testOutExe = Join-Path $outDirFull 'test_runner.exe'
+
+    Write-Host "Building and running tests..."
+    if (-not (Test-Path $outDirFull)) {
+        New-Item -ItemType Directory -Path $outDirFull | Out-Null
+    }
+
+    $clang = Get-Command clang++ -ErrorAction SilentlyContinue
+    if (-not $clang) {
+        Write-Error "clang++ not found in PATH. Please install clang and try again."
+        exit 1
+    }
+
+    Set-Location (Join-Path $projRoot 'tests')
+
+    $testArgs = @('-std=c++17', '-O2', "`"$testSrcFile`"", '-o', "`"$testOutExe`"")
+    Write-Host "clang++ $($testArgs -join ' ')"
+    & clang++ @testArgs
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Test compilation failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+    }
+
+    Write-Host "`nRunning tests..."
+    & $testOutExe
+    exit 0
+}
+
+$src = Join-Path $projRoot 'src\main.cpp'
 
 if (-not (Test-Path $src)) {
     Write-Error "Source file not found: $src"
